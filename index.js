@@ -86,6 +86,7 @@ function ElasticsearchWritable(client, options) {
 
     this.highWaterMark = options.highWaterMark || 16;
     this.flushTimeout = options.flushTimeout || null;
+    this.emitResponse = options.emitResponse || false;
     this.writtenRecords = 0;
     this.queue = [];
 }
@@ -124,7 +125,7 @@ ElasticsearchWritable.prototype.bulkWrite = function bulkWrite(records, callback
             return callback(error);
         }
 
-        callback();
+        callback(null, data);
     }.bind(this));
 };
 
@@ -197,7 +198,7 @@ ElasticsearchWritable.prototype._flush = function _flush(callback) {
         this.logger.debug('Writing %d records to Elasticsearch', recordsCount);
     }
 
-    this.bulkWrite(records, function(err) {
+    this.bulkWrite(records, function(err, rsp) {
         if (err) {
             return callback(err);
         }
@@ -207,6 +208,13 @@ ElasticsearchWritable.prototype._flush = function _flush(callback) {
         }
 
         this.writtenRecords += recordsCount;
+        if (this.emitResponse) {
+            this.emit('ACK', {
+                count: recordsCount,
+                queue: this.queue.length,
+                rsp: rsp
+            });
+        }
 
         callback();
     }.bind(this));

@@ -336,4 +336,41 @@ describe('ElasticsearchWritable', function() {
         it('should throw error on body.query missing in update_by_query record',
             getMissingFieldTest('body.query', recordUpdateByQueryFixture));
     });
+
+    describe('emit response', function() {
+        beforeEach(function() {
+            this.client = {
+                bulk: this.sinon.stub()
+            };
+
+            this.stream = new ElasticsearchWritable(this.client, {
+                highWaterMark: 10,
+                flushTimeout: 1000,
+                emitResponse: true
+            });
+
+            this.client.bulk.yields(null, successResponseFixture);
+            this.clock = sinon.useFakeTimers();
+        });
+
+        it('should emit ACK event with respnse data', function(done) {
+            this.stream.on('ACK', function(data) {
+                if (this.stream.writtenRecords === 15) {
+                    expect(data.count).to.eq(5);
+                    expect(this.client.bulk.callCount).to.eq(2);
+                    done();
+                } else {
+                    expect(data.count).to.eq(10);
+                }
+            }.bind(this));
+
+            for (var i = 0; i < 15; i++) {
+                this.stream.write(recordFixture);
+            }
+
+            this.clock.tick(1001);
+
+            expect(this.client.bulk).to.have.callCount(2);
+        });
+    });
 });
